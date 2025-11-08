@@ -10,5 +10,11 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs"
+  "type": "commonjs",
+  "dependencies": {
+    "sass": "^1.77.8"
+  },
+  "overrides": {
+    "node-sass": "$sass"
+  }
 }
