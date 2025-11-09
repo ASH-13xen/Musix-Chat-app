@@ -4,17 +4,10 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "build": "npm install --prefix backend && npm install frontend && npm run build --prefix frontend",
-    "start": "npm start --prefixx backend"
+    "build": "npm install --prefix backend && npm install --prefix frontend && npm run build --prefix frontend",
+    "start": "npm start --prefix backend"
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
-  "type": "commonjs",
-  "dependencies": {
-    "sass": "^1.93.3"
-  },
-  "overrides": {
-    "node-sass": "$sass"
-  }
+  "license": "ISC"
 }
