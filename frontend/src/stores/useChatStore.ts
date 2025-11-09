@@ -41,7 +41,10 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   messages: [],
   selectedUser: null,
 
-  setSelectedUser: (user) => set({ selectedUser: user }),
+  setSelectedUser: (user) => {
+    // When a user is selected, also clear old messages to ensure we fetch fresh ones
+    set({ selectedUser: user, messages: [] });
+  },
 
   fetchUsers: async () => {
     set({ isLoading: true, error: null });
@@ -66,6 +69,31 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         set({ onlineUsers: new Set(users) });
       });
 
+      // --- Socket Listeners for Real-time Updates ---
+
+      // Note: We only need 'receive_message', as the server is configured
+      // to send this event to both the sender and the receiver now.
+      socket.on("receive_message", (message: Message) => {
+        const { selectedUser } = get();
+        const currentUserId = userId; // The ID of the currently authenticated user
+
+        // Check if the message is for the currently selected chat
+        const isFromSelectedUser = message.senderId === selectedUser?.clerkId;
+        const isToSelectedUser = message.receiverId === selectedUser?.clerkId;
+
+        // Ensure the message is actually part of the conversation with the selected user
+        if (
+          (isFromSelectedUser && message.receiverId === currentUserId) ||
+          (isToSelectedUser && message.senderId === currentUserId)
+        ) {
+          set((state) => ({
+            messages: [...state.messages, message],
+          }));
+        }
+      });
+
+      // Removed redundant 'message_sent' listener, as 'receive_message' now handles it.
+
       socket.on("activities", (activities: [string, string][]) => {
         set({ userActivities: new Map(activities) });
       });
@@ -84,22 +112,10 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         });
       });
 
-      socket.on("receive_message", (message: Message) => {
-        set((state) => ({
-          messages: [...state.messages, message],
-        }));
-      });
-
-      socket.on("message_sent", (message: Message) => {
-        set((state) => ({
-          messages: [...state.messages, message],
-        }));
-      });
-
-      socket.on("activity_updated", ({ userId, activity }) => {
+      socket.on("activity_updated", ({ userId: updatedUserId, activity }) => {
         set((state) => {
           const newActivities = new Map(state.userActivities);
-          newActivities.set(userId, activity);
+          newActivities.set(updatedUserId, activity);
           return { userActivities: newActivities };
         });
       });
@@ -117,7 +133,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 
   sendMessage: async (receiverId, senderId, content) => {
     const socket = get().socket;
-    if (!socket) return;
+    if (!socket || !content.trim()) return; // Added trim check for empty messages
 
     socket.emit("send_message", { receiverId, senderId, content });
   },
@@ -128,7 +144,9 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       const response = await axiosInstance.get(`/users/messages/${userId}`);
       set({ messages: response.data });
     } catch (error: any) {
-      set({ error: error.response.data.message });
+      // It's common to get a 404/empty array if no messages exist, so handle the error gracefully
+      console.error("Error fetching messages:", error);
+      set({ messages: [] });
     } finally {
       set({ isLoading: false });
     }
